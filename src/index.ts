@@ -110,6 +110,12 @@ export type Beacon = {
    * team", or deleting it). Sent like `group`; later tracks stop carrying
    * the id. Removals done by someone else belong server-side. */
   ungroup: (id: string | number) => void;
+  /** The first and most recent touch this browser kept (`{first, last}`),
+   * or null when there is none — and always null under Global Privacy
+   * Control. Hand it to your server with a form post, and a conversion
+   * recorded there (the agent API's `track_contact_event`) is credited to
+   * the content that brought the visitor, like one sent from here. */
+  touches: () => TouchRecord | null;
   /** The site token this beacon reports for. */
   site: string;
   /** Stop reporting and remove the navigation hooks. */
@@ -125,6 +131,7 @@ type BalladGlobal = {
   identify?: (identity: Identity | null | undefined) => void;
   group?: (id: string | number, traits?: Record<string, unknown> | null) => void;
   ungroup?: (id: string | number) => void;
+  touches?: () => TouchRecord | null;
   /** Calls made before init: `[["track", "signup", { email }]]`,
    * `[["identify", { email }]]`, `[["group", "ws_1", { name }]]`,
    * `[["ungroup", "ws_1"]]`. */
@@ -376,8 +383,9 @@ export function init(options: BeaconOptions): Beacon | null {
   // The `window.ballad` global the script-tag beacon also provides, so
   // `window.ballad.track("signup")` in existing code keeps working, and
   // calls queued before init are replayed.
+  const touches = (): TouchRecord | null => (gpc ? null : load());
   const queued = safe(() => window.ballad?.q ?? [], []);
-  window.ballad = { track, identify, group, ungroup, q: [] };
+  window.ballad = { track, identify, group, ungroup, touches, q: [] };
   for (const call of queued)
     safe(() => {
       if (!Array.isArray(call)) return;
@@ -399,6 +407,7 @@ export function init(options: BeaconOptions): Beacon | null {
     identify,
     group,
     ungroup,
+    touches,
     destroy: () => {
       safe(() => {
         if (trackNavigation) {
@@ -503,10 +512,30 @@ export function ungroup(id: string | number): void {
   }, undefined);
 }
 
+/**
+ * The touch this browser kept, for handing to your server:
+ * `{ first, last }`, or null (none yet, before the beacon runs, or under
+ * Global Privacy Control). Also reads a script-tag beacon's
+ * `window.ballad.touches()` when this package isn't the one running.
+ */
+export function touches(): TouchRecord | null {
+  if (current) return current.touches();
+  if (typeof window === "undefined") return null;
+  return safe(() => window.ballad?.touches?.() ?? null, null);
+}
+
 /** The running beacon, if any. */
 export function getBeacon(): Beacon | null {
   return current;
 }
 
-export const ballad = { init, track, identify, group, ungroup, getBeacon };
+export const ballad = {
+  init,
+  track,
+  identify,
+  group,
+  ungroup,
+  touches,
+  getBeacon,
+};
 export default ballad;

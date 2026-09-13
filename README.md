@@ -131,6 +131,29 @@ with the post that first brought them. Nothing is counted as a conversion.
 Under Global Privacy Control nothing is sent. Before `init` the call is
 queued, and `window.ballad.identify({ email })` works for script-tag sites.
 
+## Conversions recorded on your server
+
+Some signups never touch the browser beacon: a form that posts to your own
+server, which records the person through Ballad's agent API. Pass the touch
+the beacon kept along with the form, and the conversion is credited to the
+post that brought the visitor, exactly as a `track` from the page would be:
+
+```ts
+import { touches } from "@balladlabs/beacon";
+
+const t = touches(); // { first, last } or null
+await fetch("/api/subscribe", {
+  method: "POST",
+  body: JSON.stringify({ email, touches: t }),
+});
+```
+
+Your server forwards `t.first` and `t.last` as `first` and `last` on the
+agent API's `track_contact_event`. `touches()` returns null when the browser
+has no touch yet and always under Global Privacy Control, so nothing is
+passed on for a visitor who asked not to be tracked. Script tag:
+`window.ballad.touches()`.
+
 ## Hand the touch to your app
 
 If people read your site on one origin and sign up on another (say

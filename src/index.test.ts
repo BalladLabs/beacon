@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getBeacon, group, identify, init, track, ungroup } from "./index";
+import {
+  getBeacon,
+  group,
+  identify,
+  init,
+  touches,
+  track,
+  ungroup,
+} from "./index";
 import { encodeHandoff, SESSION_KEY, STORAGE_KEY } from "./touch";
 
 /** The beacon against jsdom: what it sends, and when. */
@@ -22,6 +30,23 @@ describe("beacon", () => {
   afterEach(() => {
     getBeacon()?.destroy();
     vi.unstubAllGlobals();
+  });
+
+  it("hands out the stored touch, and nothing under GPC", () => {
+    expect(touches()).toBeNull();
+    history.replaceState(null, "", "/blog/hello?ref=tok123");
+    const b = init({ site: "site-t" });
+    const got = touches();
+    expect(got?.first.ref).toBe("tok123");
+    expect(got?.last.path).toBe("/blog/hello");
+    expect(window.ballad?.touches?.()).toEqual(got);
+    b?.destroy();
+
+    Object.defineProperty(navigator, "globalPrivacyControl", { value: true, configurable: true });
+    init({ site: "site-t2" });
+    expect(touches()).toBeNull();
+    expect(window.ballad?.touches?.()).toBeNull();
+    Object.defineProperty(navigator, "globalPrivacyControl", { value: undefined, configurable: true });
   });
 
   it("does nothing without a site token", () => {
